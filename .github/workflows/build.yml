@@ -32,6 +32,7 @@ jobs:
           TWEAK_NAME = KernelAuth
           KernelAuth_FILES = KernelAuth.mm
           KernelAuth_FRAMEWORKS = UIKit Foundation
+          KernelAuth_CFLAGS = -fno-modules -Wno-error
 
           include $(THEOS)/makefiles/tweak.mk
           EOF

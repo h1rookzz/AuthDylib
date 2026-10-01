@@ -1,42 +1,81 @@
-name: Build KernelAuth dylib
+#import <UIKit/UIKit.h>
+#import <Foundation/Foundation.h>
 
-on:
-  push:
-    branches: [ main ]
+static void showAlert(NSString *title, NSString *message) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIAlertController *alert = [UIAlertController
+            alertControllerWithTitle:title
+            message:message
+            preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"OK"
+            style:UIAlertActionStyleDefault handler:nil]];
 
-jobs:
-  build:
-    runs-on: macos-13
+        UIViewController *root = nil;
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            UIWindowScene *ws = (UIWindowScene *)scene;
+            if (ws) {
+                for (UIWindow *w in ws.windows) {
+                    if (w.isKeyWindow) {
+                        root = w.rootViewController;
+                        while (root.presentedViewController)
+                            root = root.presentedViewController;
+                        break;
+                    }
+                }
+            }
+        }
+        if (root) [root presentViewController:alert animated:YES completion:nil];
+    });
+}
 
-    steps:
-      - uses: actions/checkout@v4
+static void performAuth(void) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.2.app
+        NSString *key = [UIPasteboard generalPasteboard].string;
+        key = [key stringByTrimmingCharactersInSet:
+               [NSCharacterSet whitespaceAndNewlineCharacterSet]];
 
-      - name: Build dylib
-        run: |
-          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "SDK: $SDK"
-          clang \
-            -arch arm64 \
-            -isysroot "$SDK" \
-            -miphoneos-version-min=14.0 \
-            -dynamiclib \
-            -framework UIKit \
-            -framework Foundation \
-            -fobjc-arc \
-            -o KernelAuth.dylib \
-            KernelAuth.mm
+        if (!key || key.length == 0) {
+            showAlert(@"Error", @"Please copy your key to clipboard before trying to log in.");
+            return;
+        }
 
-      - name: Sign dylib
-        run: |
-          brew install ldid
-          ldid -S KernelAuth.dylib
+        NSString *udid = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
+        NSURL *url = [NSURL URLWithString:@"http://ramp.kz:3001/auth"];
+        NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
+        req.HTTPMethod = @"POST";
+        [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+        req.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{@"key":key,@"udid":udid}
+                                                       options:0 error:nil];
+        req.timeoutInterval = 10.0;
 
-      - name: Upload dylib
-        uses: actions/upload-artifact@v4
-        with:
-          name: KernelAuth-dylib
-          path: KernelAuth.dylib
+        [[NSURLSession.sharedSession dataTaskWithRequest:req
+            completionHandler:^(NSData *data, NSURLResponse *r, NSError *err) {
+            if (err || !data) {
+                showAlert(@"Error", @"Connection failed. Check your internet.");
+                return;
+            }
+            NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data
+                                                                 options:0 error:nil];
+            if (!json) { showAlert(@"Error", @"Invalid server response."); return; }
 
+            NSString *status = json[@"status"];
+            if ([status isEqualToString:@"ok"]) return;
+            else if ([status isEqualToString:@"banned"])
+                showAlert(@"Error", [NSString stringWithFormat:@"Banned: %@, expires at: %@",
+                    json[@"ban_code"]?:@"11", json[@"expires_at"]?:@""]);
+            else if ([status isEqualToString:@"expired"])
+                showAlert(@"Error", @"Your subscription has expired");
+            else if ([status isEqualToString:@"device_mismatch"])
+                showAlert(@"Error", @"Your device has changed since the last login. Contact the seller");
+            else
+                showAlert(@"Error", @"Invalid key.");
+        }] resume];
+    });
+}
+
+__attribute__((constructor))
+static void dylib_init(void) {
+    performAuth();
+}

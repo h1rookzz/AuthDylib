@@ -16,25 +16,31 @@ jobs:
           brew install ldid xz
           git clone --recursive https://github.com/theos/theos.git $THEOS
           git clone https://github.com/theos/sdks.git /tmp/sdks
-          cp -r /tmp/sdks/iPhoneOS16.2.sdk $THEOS/sdks/
+          ls /tmp/sdks/
+          SDK=$(ls /tmp/sdks/ | grep iPhoneOS | head -1)
+          cp -r /tmp/sdks/$SDK $THEOS/sdks/
+          echo "Using SDK: $SDK"
         env:
           THEOS: /Users/runner/theos
 
       - name: Create Makefile
         run: |
-          cat > Makefile << 'EOF'
+          SDK=$(ls /Users/runner/theos/sdks/ | grep iPhoneOS | head -1 | sed 's/iPhoneOS//' | sed 's/.sdk//')
+          cat > Makefile << EOF
           THEOS_DEVICE_IP =
-          TARGET = iphone:clang:16.2:14.0
+          TARGET = iphone:clang:$SDK:14.0
           ARCHS = arm64
 
-          include $(THEOS)/makefiles/common.mk
+          include \$(THEOS)/makefiles/common.mk
 
           TWEAK_NAME = KernelAuth
           KernelAuth_FILES = KernelAuth.mm
           KernelAuth_FRAMEWORKS = UIKit Foundation
 
-          include $(THEOS)/makefiles/tweak.mk
+          include \$(THEOS)/makefiles/tweak.mk
           EOF
+        env:
+          THEOS: /Users/runner/theos
 
       - name: Build
         run: make -j$(sysctl -n hw.ncpu)

@@ -9,7 +9,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install Theos
         run: |
@@ -41,7 +41,7 @@ jobs:
           THEOS: /Users/runner/theos
 
       - name: Upload dylib
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: KernelAuth-dylib
           path: .theos/obj/debug/KernelAuth.dylib

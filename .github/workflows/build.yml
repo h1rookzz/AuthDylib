@@ -1,0 +1,47 @@
+name: Build KernelAuth dylib
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Theos
+        run: |
+          brew install ldid xz
+          git clone --recursive https://github.com/theos/theos.git $THEOS
+          curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-sdk | bash -s -- 16.5
+        env:
+          THEOS: /Users/runner/theos
+
+      - name: Create Makefile
+        run: |
+          cat > Makefile << 'EOF'
+          THEOS_DEVICE_IP =
+          TARGET = iphone:clang:16.5:14.0
+          ARCHS = arm64
+
+          include $(THEOS)/makefiles/common.mk
+
+          TWEAK_NAME = KernelAuth
+          KernelAuth_FILES = KernelAuth.mm
+          KernelAuth_FRAMEWORKS = UIKit Foundation
+
+          include $(THEOS)/makefiles/tweak.mk
+          EOF
+
+      - name: Build
+        run: make -j$(sysctl -n hw.ncpu)
+        env:
+          THEOS: /Users/runner/theos
+
+      - name: Upload dylib
+        uses: actions/upload-artifact@v3
+        with:
+          name: KernelAuth-dylib
+          path: .theos/obj/debug/KernelAuth.dylib

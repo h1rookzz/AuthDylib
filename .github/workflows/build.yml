@@ -15,8 +15,8 @@ jobs:
         run: |
           brew install ldid xz
           git clone --recursive https://github.com/theos/theos.git $THEOS
-          curl -LO https://github.com/theos/sdks/releases/download/latest/iPhoneOS16.2.sdk.tar.xz
-          tar -xf iPhoneOS16.2.sdk.tar.xz -C $THEOS/sdks
+          git clone https://github.com/theos/sdks.git /tmp/sdks
+          cp -r /tmp/sdks/iPhoneOS16.2.sdk $THEOS/sdks/
         env:
           THEOS: /Users/runner/theos
 

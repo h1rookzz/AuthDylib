@@ -6,20 +6,21 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-13
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install tools
-        run: brew install ldid
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app
 
       - name: Build dylib
         run: |
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          clang++ \
+          echo "SDK: $SDK"
+          clang \
             -arch arm64 \
-            -isysroot $SDK \
+            -isysroot "$SDK" \
             -miphoneos-version-min=14.0 \
             -dynamiclib \
             -framework UIKit \
@@ -27,6 +28,10 @@ jobs:
             -fobjc-arc \
             -o KernelAuth.dylib \
             KernelAuth.mm
+
+      - name: Sign dylib
+        run: |
+          brew install ldid
           ldid -S KernelAuth.dylib
 
       - name: Upload dylib
@@ -34,3 +39,4 @@ jobs:
         with:
           name: KernelAuth-dylib
           path: KernelAuth.dylib
+

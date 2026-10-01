@@ -11,39 +11,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Theos
+      - name: Install tools
+        run: brew install ldid
+
+      - name: Build dylib
         run: |
-          brew install ldid xz
-          git clone --recursive https://github.com/theos/theos.git $THEOS
-          git clone --depth=1 https://github.com/theos/sdks.git /tmp/sdks
-          cp -r /tmp/sdks/iPhoneOS16.5.sdk $THEOS/sdks/
-        env:
-          THEOS: /Users/runner/theos
-
-      - name: Create Makefile
-        run: |
-          cat > Makefile << 'EOF'
-          THEOS_DEVICE_IP =
-          TARGET = iphone:clang:16.5:14.0
-          ARCHS = arm64
-
-          include $(THEOS)/makefiles/common.mk
-
-          TWEAK_NAME = KernelAuth
-          KernelAuth_FILES = KernelAuth.mm
-          KernelAuth_FRAMEWORKS = UIKit Foundation
-          KernelAuth_CFLAGS = -fno-modules -Wno-error
-
-          include $(THEOS)/makefiles/tweak.mk
-          EOF
-
-      - name: Build
-        run: make -j$(sysctl -n hw.ncpu)
-        env:
-          THEOS: /Users/runner/theos
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          clang++ \
+            -arch arm64 \
+            -isysroot $SDK \
+            -miphoneos-version-min=14.0 \
+            -dynamiclib \
+            -framework UIKit \
+            -framework Foundation \
+            -fobjc-arc \
+            -o KernelAuth.dylib \
+            KernelAuth.mm
+          ldid -S KernelAuth.dylib
 
       - name: Upload dylib
         uses: actions/upload-artifact@v4
         with:
           name: KernelAuth-dylib
-          path: .theos/obj/debug/KernelAuth.dylib
+          path: KernelAuth.dylib
